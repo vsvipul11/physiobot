@@ -16,10 +16,84 @@ import {
   UltravoxExperimentalMessageEvent,
 } from "ultravox-client";
 import { PhoneOffIcon, ExternalLinkIcon, CalendarIcon } from "lucide-react";
+import { Calendar, Clock, MapPin, User, CreditCard, ExternalLink } from 'lucide-react';
 import { CalComService } from "@/lib/calComService";
 import MicToggleButton from "./components/MicToggleButton";
 import demoConfig from "./demo-config";
 import { ConsultationData, Symptom, Appointment } from "@/lib/types";
+import { parseBookAppointmentResponse, formatDateTime, extractTimeFromDateTime } from './utils/toolResponseParser';
+import AppointmentConfirmation from './components/AppointmentConfirmation';
+
+// Simple appointment display component for direct tool response
+const SimpleAppointmentDisplay = ({ data }) => {
+  if (!data || !data.success) return null;
+  
+  const appointmentInfo = data.appointmentInfo || {};
+  const payment = data.payment || {};
+  
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-green-200">
+      <div className="bg-green-500 p-3 text-white">
+        <h3 className="text-lg font-semibold">Appointment Confirmed!</h3>
+      </div>
+      
+      <div className="p-4 space-y-3">
+        {appointmentInfo.appointed_doctor && (
+          <div>
+            <span className="font-medium">Doctor: </span>
+            <span>{appointmentInfo.appointed_doctor}</span>
+          </div>
+        )}
+        
+        {appointmentInfo.startDateTime && (
+          <div>
+            <span className="font-medium">Date/Time: </span>
+            <span>{appointmentInfo.startDateTime}</span>
+          </div>
+        )}
+        
+        {appointmentInfo.consultation_type && (
+          <div>
+            <span className="font-medium">Type: </span>
+            <span className="capitalize">{appointmentInfo.consultation_type}</span>
+          </div>
+        )}
+        
+        {appointmentInfo.campus_id && (
+          <div>
+            <span className="font-medium">Center: </span>
+            <span>{appointmentInfo.campus_id}</span>
+          </div>
+        )}
+        
+        {payment.reference_id && (
+          <div>
+            <span className="font-medium">Booking ID: </span>
+            <span>{payment.reference_id}</span>
+          </div>
+        )}
+        
+        <div className="border-t border-gray-200 pt-3 mt-3">
+          <div className="text-sm text-gray-500 mb-2">
+            Status: <span className="font-medium text-orange-500">Pending Payment</span>
+          </div>
+          
+          {payment.short_url && (
+            <a
+              href={payment.short_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition-colors"
+            >
+              <span>Complete Payment</span>
+              <ExternalLink className="ml-2" size={16} />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Mobile Number popup component
 const MobileNumberPopup = ({ onSubmit }) => {
@@ -70,10 +144,140 @@ const MobileNumberPopup = ({ onSubmit }) => {
   );
 };
 
+// City Selection popup component
+const CitySelectionPopup = ({ onSelectCity, onClose }) => {
+  const cities = [
+    { id: "bangalore", name: "Bangalore" },
+    { id: "hyderabad", name: "Hyderabad" }
+  ];
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Select Location</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          {cities.map((city) => (
+            <button
+              key={city.id}
+              className="p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-center"
+              onClick={() => onSelectCity(city.id, city.name)}
+            >
+              {city.name}
+            </button>
+          ))}
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="w-full mt-2 p-2 bg-gray-200 text-gray-700 rounded"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Center Selection popup component
+const CenterSelectionPopup = ({ city, onSelectCenter, onClose }) => {
+  // Define centers for each city
+  const centersByCity = {
+    bangalore: [
+      { id: "JAYANAGAR", name: "Jayanagar" },
+      { id: "ELECTRONIC CITY", name: "Electronic City" },
+      { id: "SARJAPURA", name: "Sarjapura" },
+      { id: "BELLANDUR", name: "Bellandur" },
+      { id: "WHITEFIELD", name: "Whitefield" },
+      { id: "BANNERGHATTA", name: "Bannerghatta" },
+      { id: "INDIRANAGAR", name: "Indiranagar" },
+    ],
+    hyderabad: [
+      { id: "HSR", name: "HSR" },
+      { id: "SAHAKAR NAGAR", name: "Sahakar Nagar" },
+      { id: "BANASHANKARI", name: "Banashankari" },
+      { id: "MALLESHWARAM", name: "Malleshwaram" },
+      { id: "KANAKPURA ROAD", name: "Kanakpura Road" },
+      { id: "JUBILEE HILLS", name: "Jubilee Hills" },
+      { id: "KUKATPALLY", name: "Kukatpally" },
+      { id: "GACHIBOWLI", name: "Gachibowli" },
+    ]
+  };
+  
+  const centers = centersByCity[city] || [];
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Select Center in {city.charAt(0).toUpperCase() + city.slice(1)}</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto mb-4">
+          {centers.map((center) => (
+            <button
+              key={center.id}
+              className="p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-center"
+              onClick={() => onSelectCenter(center.id, center.name)}
+            >
+              {center.name}
+            </button>
+          ))}
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="w-full mt-2 p-2 bg-gray-200 text-gray-700 rounded"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Available Slots popup component
 const AvailableSlotsPopup = ({ slots, onSelectSlot, onClose, selectedDay, selectedWeek }) => {
   const displaySlots = Array.isArray(slots) ? slots : 
                        (typeof slots === 'string' ? slots.split(/,\s*/) : []);
+  
+  // Format slots in hour ranges if they're not already
+  const formattedSlots = displaySlots.map(slot => {
+    // Check if the slot is already in hour range format (like "9-10 AM")
+    if (slot.includes("-")) return slot;
+    
+    // Simple time format like "9AM" or "14:00"
+    const timeMatch = slot.match(/(\d+)(?::(\d+))?\s*([aApP][mM])?/);
+    if (!timeMatch) return slot;
+    
+    let hour = parseInt(timeMatch[1]);
+    const minutes = timeMatch[2] || "00";
+    const ampm = timeMatch[3] || (hour >= 12 ? "PM" : "AM");
+    
+    // For 24-hour format
+    if (!timeMatch[3] && hour > 12) {
+      hour = hour % 12 || 12;
+    }
+    
+    const nextHour = (hour % 12) + 1;
+    const nextAmPm = hour === 11 ? (ampm === "AM" ? "PM" : "AM") : ampm;
+    
+    return `${hour}-${nextHour} ${ampm}`;
+  });
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -93,9 +297,9 @@ const AvailableSlotsPopup = ({ slots, onSelectSlot, onClose, selectedDay, select
           </p>
         )}
         
-        {displaySlots.length > 0 ? (
+        {formattedSlots.length > 0 ? (
           <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-4">
-            {displaySlots.map((slot, index) => (
+            {formattedSlots.map((slot, index) => (
               <button
                 key={index}
                 className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-center"
@@ -166,6 +370,11 @@ interface AppointmentData extends Appointment {
   endDateTime?: string;
   campus?: string;
   status?: string;
+  // Added these properties that were missing
+  paymentData?: Record<string, any>;
+  leadId?: string | number;
+  paymentMode?: string;
+  consultationTypeId?: string | number;
 }
 
 interface ExtendedConsultation {
@@ -230,6 +439,13 @@ const Home = () => {
   const [bookingId, setBookingId] = useState("");
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingAppointment[]>([]);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [showCityPopup, setShowCityPopup] = useState(false);
+  const [showCenterPopup, setShowCenterPopup] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedCenter, setSelectedCenter] = useState("");
+  
+  // Add state for storing direct tool responses
+  const [directBookAppointmentResponse, setDirectBookAppointmentResponse] = useState(null);
   
   const transcriptContainerRef = useRef(null);
   const calendarService = useMemo(() => CalComService.getInstance(), []);
@@ -279,6 +495,41 @@ const Home = () => {
     fetchUpcomingAppointments(mobileNumber);
   };
 
+  const handleSelectCity = (cityId, cityName) => {
+    setSelectedCity(cityId);
+    
+    // Add the user's selection to the call transcript display
+    const citySelectionMessage = `I'd like to book in ${cityName}.`;
+    const newMessage = {
+      message: {
+        message: `User: ${citySelectionMessage}`
+      }
+    };
+    
+    setCallDebugMessages(prev => [...prev, newMessage]);
+    setShowCityPopup(false);
+    
+    // After selecting a city, show center selection
+    setTimeout(() => {
+      setShowCenterPopup(true);
+    }, 500);
+  };
+
+  const handleSelectCenter = (centerId, centerName) => {
+    setSelectedCenter(centerId);
+    
+    // Add the user's selection to the call transcript display
+    const centerSelectionMessage = `I'd like the ${centerName} center.`;
+    const newMessage = {
+      message: {
+        message: `User: ${centerSelectionMessage}`
+      }
+    };
+    
+    setCallDebugMessages(prev => [...prev, newMessage]);
+    setShowCenterPopup(false);
+  };
+
   const handleSelectTimeSlot = (slot) => {
     // This mimics the user selecting a slot which would be spoken in the call
     const timeSlotMessage = `I'd like the ${slot} slot.`;
@@ -300,6 +551,65 @@ const Home = () => {
     }
   }, [callTranscript, callDebugMessages]);
 
+  // Function to directly extract bookAppointment response from a message
+  const extractBookAppointmentResponse = (message) => {
+    try {
+      console.log("Attempting to extract bookAppointment response from message");
+      
+      // Don't process if it's not a bookAppointment message
+      if (!message.includes("bookAppointment")) {
+        return null;
+      }
+      
+      // Try different extraction strategies
+      // Strategy 1: Direct JSON extraction
+      const jsonPattern = /(\{[\s\S]*"success"[\s\S]*\})/;
+      const jsonMatch = message.match(jsonPattern);
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          const responseData = JSON.parse(jsonMatch[1]);
+          console.log("Extracted bookAppointment response (direct):", responseData);
+          return responseData;
+        } catch (e) {
+          console.error("Failed to parse direct JSON match:", e);
+        }
+      }
+      
+      // Strategy 2: Look for backtick-wrapped JSON
+      const backtickPattern = /`({[\s\S]*?})`/;
+      const backtickMatch = message.match(backtickPattern);
+      if (backtickMatch && backtickMatch[1]) {
+        try {
+          const responseData = JSON.parse(backtickMatch[1]);
+          console.log("Extracted bookAppointment response (backticks):", responseData);
+          return responseData;
+        } catch (e) {
+          console.error("Failed to parse backtick JSON:", e);
+        }
+      }
+      
+      // Strategy 3: Full message scan for JSON
+      const jsonStart = message.indexOf('{');
+      const jsonEnd = message.lastIndexOf('}') + 1;
+      
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        try {
+          const jsonStr = message.substring(jsonStart, jsonEnd);
+          const responseData = JSON.parse(jsonStr);
+          console.log("Extracted bookAppointment response (full scan):", responseData);
+          return responseData;
+        } catch (e) {
+          console.error("Failed to parse full message JSON:", e);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error in extractBookAppointmentResponse:", error);
+      return null;
+    }
+  };
+
   // Detect appointment details and payment links from conversation
   useEffect(() => {
     if (callDebugMessages.length > 0) {
@@ -312,7 +622,14 @@ const Home = () => {
       
       lastProcessedMessageRef.current = latestMessage;
       setLastUpdateTime(new Date().toLocaleTimeString());
-
+  
+      // Check for city selection trigger
+      if (latestMessage.includes("prefer Bangalore or Hyderabad") || 
+          latestMessage.includes("prefer our Bangalore or Hyderabad")) {
+        console.log("Detected city selection prompt");
+        setShowCityPopup(true);
+      }
+  
       // Extract appointment information from conversation text
       if (latestMessage.includes("consultation has been booked") || 
           latestMessage.includes("appointment has been booked")) {
@@ -354,6 +671,7 @@ const Home = () => {
                 time: time || prev.appointment?.time || "TBD",
                 doctor: doctor || prev.appointment?.doctor || "",
                 paymentLink: extractedPaymentLink || prev.appointment?.paymentLink || "",
+                location: selectedCenter,
                 mobileNumber: userMobileNumber
               }
             }));
@@ -362,9 +680,10 @@ const Home = () => {
           console.error("Error extracting appointment details:", error);
         }
       }
-
+  
       // Check for available slots in conversation
       if (latestMessage.includes("slots available") ||
+          latestMessage.includes("following slots") ||
           latestMessage.includes("time slot") ||
           latestMessage.includes("time slots")) {
         try {
@@ -376,7 +695,7 @@ const Home = () => {
             setSelectedWeek(latestMessage.includes("next week") ? "next week" : "this week");
           }
           
-          // Extract time slots
+          // Extract time slots if mentioned
           let slots = [];
           
           // Pattern like "9-10 AM, 10-11 AM, 11-12 AM" etc.
@@ -403,7 +722,7 @@ const Home = () => {
           console.error("Error extracting slots from message:", error);
         }
       }
-
+  
       // Check for fetchSlots calls and extract available slots
       if (latestMessage.includes("fetchSlots")) {
         try {
@@ -457,102 +776,207 @@ const Home = () => {
           console.error("Error processing fetchSlots data:", error);
         }
       }
-
-      // Check for appointment booking result
+  
+      // ENHANCED BOOKING APPOINTMENT HANDLER
       if (latestMessage.includes("bookAppointment")) {
         try {
-          const jsonStart = latestMessage.indexOf("{");
-          const jsonEnd = latestMessage.lastIndexOf("}") + 1;
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            const jsonStr = latestMessage.slice(jsonStart, jsonEnd);
-            const data = JSON.parse(jsonStr);
+          // Try to directly extract the response first
+          const directResponse = extractBookAppointmentResponse(latestMessage);
+          
+          if (directResponse && directResponse.success) {
+            console.log("Successfully extracted direct bookAppointment response:", directResponse);
             
-            // Check if the result contains a JSON string that needs to be parsed again
-            if (data.result && typeof data.result === 'string' && data.result.startsWith('{')) {
-              try {
-                const resultData = JSON.parse(data.result);
-                console.log("Parsed booking result data:", resultData);
-                
-                if (resultData.success) {
-                  // Extract appointment info and payment details
-                  const appointmentInfo = resultData.appointmentInfo || {};
-                  const payment = resultData.payment || {};
-                  
-                  // Get doctor name
-                  const doctor = appointmentInfo.appointed_doctor || "";
-                  
-                  // Get payment link
-                  const paymentUrl = payment.short_url || "";
-                  if (paymentUrl) {
-                    setPaymentLink(paymentUrl);
-                  }
-                  
-                  // Get appointment date/time
-                  const startDateTime = appointmentInfo.startDateTime || "";
-                  
-                  // Get consultation type
-                  const consultationType = appointmentInfo.consultation_type || "TBD";
-                  
-                  // Get booking reference
-                  const bookingRef = payment.reference_id || "";
-                  if (bookingRef) {
-                    setBookingId(bookingRef);
-                  }
-                  
-                  // Update consultation data
-                  setConsultationData(prev => ({
-                    ...prev,
-                    appointment: {
-                      ...prev.appointment,
-                      type: consultationType,
-                      doctor: doctor,
-                      startDateTime: startDateTime,
-                      date: startDateTime ? startDateTime.split(' ')[0] : prev.appointment?.date || "TBD",
-                      time: startDateTime ? startDateTime.split(' ')[1].substring(0, 5) : prev.appointment?.time || "TBD",
-                      paymentLink: paymentUrl || prev.appointment?.paymentLink || "",
-                      bookingId: bookingRef || prev.appointment?.bookingId || "",
-                      mobileNumber: userMobileNumber
-                    }
-                  }));
-                  
-                  // Refresh upcoming appointments
-                  setTimeout(() => {
-                    fetchUpcomingAppointments(userMobileNumber);
-                  }, 2000);
-                }
-              } catch (e) {
-                console.error("Error parsing result data:", e);
+            // Store the direct response
+            setDirectBookAppointmentResponse(directResponse);
+            
+            // Update the regular consultation data too for backward compatibility
+            const appointmentInfo = directResponse.appointmentInfo || {};
+            const payment = directResponse.payment || {};
+            
+            // Format time from startDateTime
+            let formattedTime = "TBD";
+            if (appointmentInfo.startDateTime) {
+              const parts = appointmentInfo.startDateTime.split(' ');
+              if (parts.length >= 2) {
+                formattedTime = parts[1];
               }
-            } else if (data.success) {
-              // Direct success response
-              if (data.paymentLink) {
-                setPaymentLink(data.paymentLink);
+            }
+            
+            // Update consultation data with all appointment details
+            setConsultationData(prev => ({
+              ...prev,
+              appointment: {
+                ...prev.appointment,
+                type: appointmentInfo.consultation_type || "TBD",
+                doctor: appointmentInfo.appointed_doctor || "",
+                startDateTime: appointmentInfo.startDateTime || "",
+                date: appointmentInfo.calculated_date || 
+                      (appointmentInfo.startDateTime ? appointmentInfo.startDateTime.split(' ')[0] : "TBD"),
+                time: formattedTime,
+                paymentLink: payment.short_url || "",
+                bookingId: payment.reference_id || "",
+                location: selectedCenter,
+                mobileNumber: userMobileNumber,
+                status: "Pending Payment",
+                consultationTypeId: appointmentInfo.consultation_type_id || "",
+                leadId: appointmentInfo.lead_id || "",
+                paymentMode: appointmentInfo.payment_mode || "online",
+                paymentData: payment.paymentData || {}
               }
-              if (data.appointmentId) {
-                setBookingId(data.appointmentId);
-              }
+            }));
+            
+            // Set payment link and booking ID separately for easy access
+            if (payment.short_url) {
+              setPaymentLink(payment.short_url);
+            }
+            if (payment.reference_id) {
+              setBookingId(payment.reference_id);
+            }
+            
+            // Refresh upcoming appointments
+            setTimeout(() => {
+              fetchUpcomingAppointments(userMobileNumber);
+            }, 2000);
+          } else {
+            // Fall back to existing parsing logic if direct extraction fails
+            // Use the utility function to parse the response
+            const appointmentData = parseBookAppointmentResponse(latestMessage);
+            
+            if (appointmentData && appointmentData.success) {
+              console.log("Successfully parsed booking data:", appointmentData);
               
-              // Update consultation data with payment info
+              // Format time from startDateTime
+              let formattedTime = extractTimeFromDateTime(appointmentData.appointment.startDateTime);
+              
+              // Update consultation data with all appointment details
               setConsultationData(prev => ({
                 ...prev,
                 appointment: {
                   ...prev.appointment,
-                  paymentLink: data.paymentLink || "",
-                  bookingId: data.appointmentId || ""
+                  type: appointmentData.appointment.consultationType,
+                  doctor: appointmentData.appointment.doctorName,
+                  startDateTime: appointmentData.appointment.startDateTime,
+                  date: appointmentData.appointment.calculatedDate || 
+                        (appointmentData.appointment.startDateTime ? 
+                          appointmentData.appointment.startDateTime.split(' ')[0] : 
+                          "TBD"),
+                  time: formattedTime,
+                  paymentLink: appointmentData.payment.shortUrl,
+                  bookingId: appointmentData.payment.referenceId,
+                  location: selectedCenter,
+                  mobileNumber: userMobileNumber,
+                  status: "Pending Payment",
+                  consultationTypeId: appointmentData.appointment.consultationTypeId,
+                  leadId: appointmentData.appointment.leadId,
+                  paymentMode: appointmentData.appointment.paymentMode,
+                  paymentData: appointmentData.payment.paymentData
                 }
               }));
+              
+              // Set payment link and booking ID separately for easy access
+              if (appointmentData.payment.shortUrl) {
+                setPaymentLink(appointmentData.payment.shortUrl);
+              }
+              if (appointmentData.payment.referenceId) {
+                setBookingId(appointmentData.payment.referenceId);
+              }
               
               // Refresh upcoming appointments
               setTimeout(() => {
                 fetchUpcomingAppointments(userMobileNumber);
               }, 2000);
+            } else {
+              // Fallback to original json extraction if utility function fails
+              const jsonRegex = /\{[\s\S]*"success"[\s\S]*\}/;
+              const jsonMatch = latestMessage.match(jsonRegex);
+              
+              if (jsonMatch) {
+                try {
+                  const jsonData = JSON.parse(jsonMatch[0]);
+                  console.log("Fallback parsed booking result data:", jsonData);
+                  
+                  if (jsonData.success) {
+                    // Store the direct response
+                    setDirectBookAppointmentResponse(jsonData);
+                    
+                    const appointmentInfo = jsonData.appointmentInfo || {};
+                    const payment = jsonData.payment || {};
+                    
+                    // Extract all necessary data
+                    const doctor = appointmentInfo.appointed_doctor || "";
+                    const startDateTime = appointmentInfo.startDateTime || "";
+                    const consultationType = appointmentInfo.consultation_type || "TBD";
+                    const paymentUrl = payment.short_url || "";
+                    const bookingRef = payment.reference_id || "";
+                    
+                    // Format date and time
+                    let formattedDate = "TBD";
+                    let formattedTime = "TBD";
+                    
+                    if (startDateTime) {
+                      const parts = startDateTime.split(' ');
+                      if (parts.length >= 2) {
+                        formattedDate = parts[0];
+                        
+                        // Convert time to readable format
+                        const timeParts = parts[1].split(':');
+                        if (timeParts.length >= 2) {
+                          const hour = parseInt(timeParts[0]);
+                          const minute = timeParts[1];
+                          
+                          // Format as "4-5 PM" style
+                          const hourEnd = hour + 1;
+                          const period = hour >= 12 ? "PM" : "AM";
+                          const hour12 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+                          
+                          formattedTime = `${hour12}-${hourEnd > 12 ? hourEnd - 12 : hourEnd} ${period}`;
+                        }
+                      }
+                    }
+                    
+                    // Update consultation data with all the appointment details
+                    setConsultationData(prev => ({
+                      ...prev,
+                      appointment: {
+                        ...prev.appointment,
+                        type: consultationType,
+                        doctor: doctor,
+                        startDateTime: startDateTime,
+                        date: formattedDate,
+                        time: formattedTime,
+                        paymentLink: paymentUrl,
+                        bookingId: bookingRef,
+                        location: selectedCenter,
+                        mobileNumber: userMobileNumber,
+                        status: "Pending Payment",
+                        paymentData: payment.paymentData || {}
+                      }
+                    }));
+                    
+                    // Set payment link and booking ID separately for easy access
+                    if (paymentUrl) {
+                      setPaymentLink(paymentUrl);
+                    }
+                    if (bookingRef) {
+                      setBookingId(bookingRef);
+                    }
+                    
+                    // Refresh upcoming appointments
+                    setTimeout(() => {
+                      fetchUpcomingAppointments(userMobileNumber);
+                    }, 2000);
+                  }
+                } catch (error) {
+                  console.error("Error parsing JSON response:", error);
+                }
+              }
             }
           }
         } catch (error) {
-          console.error("Error parsing booking data:", error);
+          console.error("Error processing booking response:", error);
         }
       }
-
+  
       // Parse consultation data from updateConsultation calls
       const parsedData = parseConsultationData(latestMessage);
       if (parsedData) {
@@ -564,7 +988,7 @@ const Home = () => {
             appointment: parsedData.appointment
               ? {
                   type: parsedData.appointment.type || prevData.appointment?.type || "TBD",
-                  location: parsedData.appointment.location || prevData.appointment?.location || "TBD",
+                  location: parsedData.appointment.location || selectedCenter || prevData.appointment?.location || "TBD",
                   date: parsedData.appointment.date || prevData.appointment?.date || "TBD",
                   time: parsedData.appointment.time || prevData.appointment?.time || "TBD",
                   mobileNumber: userMobileNumber,
@@ -574,12 +998,12 @@ const Home = () => {
                 }
               : prevData.appointment,
           };
-
+  
           return newData;
         });
       }
     }
-  }, [callDebugMessages, userMobileNumber, paymentLink, bookingId]);
+  }, [callDebugMessages, userMobileNumber, paymentLink, bookingId, selectedCenter]);
 
   const handleStatusChange = useCallback((status: string | undefined) => {
     if (status) {
@@ -615,7 +1039,6 @@ const Home = () => {
   const clearCustomerProfile = useCallback(() => {
     setCustomerProfileKey((prev) => (prev ? `${prev}-cleared` : "cleared"));
   }, []);
-
   const getCallStatus = () => {
     if (!isCallActive) return "Not started";
     if (agentStatus === "Call started successfully") return "In progress";
@@ -636,10 +1059,15 @@ const Home = () => {
       clearCustomerProfile();
       setAppointmentSlots([]);
       setShowSlotsPopup(false);
+      setShowCityPopup(false);
+      setShowCenterPopup(false);
+      setSelectedCity("");
+      setSelectedCenter("");
       setSelectedDay("");
       setSelectedWeek("");
       setPaymentLink("");
       setBookingId("");
+      setDirectBookAppointmentResponse(null); // Reset the direct response
       lastProcessedMessageRef.current = "";
       setConsultationData({
         symptoms: [],
@@ -738,6 +1166,8 @@ const Home = () => {
   return (
     <>
       {showMobilePopup && <MobileNumberPopup onSubmit={handleMobileNumberSubmit} />}
+      {showCityPopup && <CitySelectionPopup onSelectCity={handleSelectCity} onClose={() => setShowCityPopup(false)} />}
+      {showCenterPopup && <CenterSelectionPopup city={selectedCity} onSelectCenter={handleSelectCenter} onClose={() => setShowCenterPopup(false)} />}
       {showSlotsPopup && (
         <AvailableSlotsPopup 
           slots={appointmentSlots} 
@@ -880,6 +1310,21 @@ const Home = () => {
                             </p>
                           </div>
 
+                          {/* Location/Center Selection Info */}
+                          {selectedCity && (
+                            <div>
+                              <h3 className="text-red-500 font-medium">
+                                Selected Location
+                              </h3>
+                              <div className="bg-red-50 p-2 mt-1">
+                                <div className="mb-1"><strong>City:</strong> {selectedCity.charAt(0).toUpperCase() + selectedCity.slice(1)}</div>
+                                {selectedCenter && (
+                                  <div><strong>Center:</strong> {selectedCenter}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
                           <div>
                             <h3 className="text-red-500 font-medium">
                               Reported Symptoms
@@ -938,6 +1383,47 @@ const Home = () => {
                             </div>
                           )}
 
+                          {/* Display the direct appointment response if available */}
+                          {directBookAppointmentResponse && (
+                            <div className="mt-4">
+                              <h2 className="text-xl font-semibold border-b border-green-500 pb-1 mb-4">
+                                Appointment Confirmation
+                              </h2>
+                              <SimpleAppointmentDisplay data={directBookAppointmentResponse} />
+                            </div>
+                          )}
+
+                          {/* Use existing appointment display as fallback */}
+                          {!directBookAppointmentResponse && consultationData.appointment && 
+                           consultationData.appointment.bookingId && (
+                            <div className="mt-4">
+                              <h2 className="text-xl font-semibold border-b border-green-500 pb-1 mb-4">
+                                Appointment Confirmation
+                              </h2>
+                              <AppointmentConfirmation 
+                                appointmentData={{
+                                  success: true,
+                                  appointment: {
+                                    doctorName: consultationData.appointment.doctor || "TBD",
+                                    startDateTime: consultationData.appointment.startDateTime || "",
+                                    calculatedDate: consultationData.appointment.date || "",
+                                    consultationType: consultationData.appointment.type || "TBD",
+                                    location: consultationData.appointment.location || "",
+                                    consultationTypeId: consultationData.appointment.consultationTypeId || "",
+                                    leadId: consultationData.appointment.leadId || "",
+                                    paymentMode: consultationData.appointment.paymentMode || "online"
+                                  },
+                                  payment: {
+                                    shortUrl: consultationData.appointment.paymentLink || "https://rzp.io/rzp/LIWxbP4D",
+                                    referenceId: consultationData.appointment.bookingId || "",
+                                    paymentData: consultationData.appointment.paymentData || {}
+                                  }
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Keep the old Scheduled Consultation section for backward compatibility */}
                           {(consultationData.appointment && 
                            (consultationData.appointment.date !== "TBD" || 
                             consultationData.appointment.time !== "TBD" || 
@@ -948,36 +1434,36 @@ const Home = () => {
                               </h3>
                               <div className="bg-red-50 p-3 rounded">
                                 <div className="text-gray-600">
-                                  <div>
-                                    <span className="font-medium">Type: </span>
-                                    {consultationData.appointment.type || "TBD"}
-                                  </div>
-                                  {consultationData.appointment.doctor && (
-                                    <div>
-                                      <span className="font-medium">Doctor: </span>
-                                      {consultationData.appointment.doctor}
-                                    </div>
-                                  )}
-                                  {consultationData.appointment.location && consultationData.appointment.location !== "TBD" && (
-                                    <div>
-                                      <span className="font-medium">Location: </span>
-                                      {consultationData.appointment.location}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <span className="font-medium">Date: </span>
-                                    {consultationData.appointment.startDateTime ? 
-                                      formatDate(consultationData.appointment.startDateTime) :
-                                      (consultationData.appointment.date === "TBD"
-                                        ? "To be decided"
-                                        : selectedDay || consultationData.appointment.date)
-                                    }
-                                  </div>
+                                <div>
+  <span className="font-medium">Type: </span>
+  {consultationData.appointment.type || "In-person"}
+</div>
+{consultationData.appointment.doctor && (
+  <div>
+    <span className="font-medium">Doctor: </span>
+    {consultationData.appointment.doctor}
+  </div>
+)}
+{consultationData.appointment.location && consultationData.appointment.location !== "TBD" && (
+  <div>
+    <span className="font-medium">Location: </span>
+    {consultationData.appointment.location}
+  </div>
+)}
+<div>
+  <span className="font-medium">Payment Url: </span>
+  <a href={consultationData.appointment.type === "Online" ? "https://rzp.io/rzp/3AMWZfL" : "https://rzp.io/rzp/LIWxbP4D"}>
+    {consultationData.appointment.type === "Online" ? "https://rzp.io/rzp/3AMWZfL" : "https://rzp.io/rzp/LIWxbP4D"}
+  </a>
+</div>
+<div>
+  <span className="font-medium">Date: </span>
+  {consultationData.appointment.date || "TBD"}
+</div>
+
                                   <div>
                                     <span className="font-medium">Time: </span>
-                                    {consultationData.appointment.time === "TBD"
-                                      ? "To be decided"
-                                      : consultationData.appointment.time}
+                                    {consultationData.appointment.time || "TBD"}
                                   </div>
                                   {userMobileNumber && (
                                     <div>
@@ -989,6 +1475,12 @@ const Home = () => {
                                     <div>
                                       <span className="font-medium">Booking ID: </span>
                                       {consultationData.appointment.bookingId}
+                                    </div>
+                                  )}
+                                  {consultationData.appointment.status && (
+                                    <div>
+                                      <span className="font-medium">Status: </span>
+                                      {consultationData.appointment.status}
                                     </div>
                                   )}
                                   {consultationData.appointment.paymentLink && (

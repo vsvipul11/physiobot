@@ -39,13 +39,14 @@ function getSystemPrompt(userMobileNumber: string = '') {
      - First ask if they prefer online or in-person consultation
      
      For In-Person Appointments:
-     - Ask for preferred city (Bangalore or Hyderabad)
-     - Ask for preferred center from available locations like Indiranagar
-     - Next, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
+     - Ask "Would you prefer our Bangalore or Hyderabad location?" (wait for answer)
+     - Based on their city selection, available centers will appear in a popup
+     - Simply say "Please select your preferred center" (don't list the centers verbally)
+     - After they select a center, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
      - After they answer about the week, ask ONLY for the preferred day (Mon to Sat, no Sundays)
      - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
-     - After slots are fetched, ALWAYS present them in an hour-by-hour format like: "9-10 AM, 10-11 AM, 11-12 PM, 12-1 PM, 1-2 PM" etc.
-     - Always present EACH individual available slot, not a range of slots and do not say all the slots just have them so it is displayed in the popup and let user select 
+     - After fetcing the slots Present slots in individual hour format and make sure that the slot popup comes up the format should not be in range rather it should be line 9Am 10Am 11Am 12pm like this (9 AM, 10 AM, etc.)
+     - Always present EACH individual available slot, not a range of slots and do not say all the slots just have them so it is displayed in the popup and let user select
      - Say exactly: "We have these slots available"
      - After presenting the slots, ask them to select a specific time slot
      - Working Hours: 8 AM to 8 PM
@@ -55,21 +56,37 @@ function getSystemPrompt(userMobileNumber: string = '') {
      - First, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
      - After they answer about the week, ask ONLY for the preferred day (Mon to Sat, no Sundays)
      - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
-     - After slots are fetched, ALWAYS present them in an hour-by-hour format like: "9-10 AM, 10-11 AM, 11-12 PM, 12-1 PM, 1-2 PM" etc.
-     - Always present EACH individual available slot, not a range of slots
-     - Say exactly: "We have these slots available: [list each slot]"
+     AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
+     - After slots are fetched, ALWAYS present them in an individual hour format like: "9 AM, 10 AM, 12 PM, 1 PM, 2 PM" etc.
+     - Always present EACH individual available slot, not a range of slots and do not say all the slots just have them so it is displayed in the popup and let user select
+     - Say exactly: "We have these slots available"
      - After presenting the slots, ask them to select a specific time slot
      - Working Hours: 8 AM to 8 PM
      - Consultation fee: 99 $
 
      Collect details step-by-step (follow this EXACT SEQUENCE - never skip steps!):
-     1. Week selection (this week or next week)
+     For In-Person:
+     1. Ask for city preference (Bangalore or Hyderabad)
+     2. Present center options via popup, asking user to select one
+     3. AFTER center selection, ask for week selection (this week or next week)
+     4. WAIT for user's answer about the week
+     5. THEN ask for Appointment Day (Working Days: Mon to Sat)
+     6. WAIT for user's answer about the day
+     7. ONLY AFTER having city, center, week and day, use fetchSlots tool
+     8. Present slots in hour format and make sure that the slot popup comes up (9 AM, 10 AM, etc.)
+     9. Wait for the user to select a slot from the popup or tell you their preferred time
+     10. Ask for patient name
+     11. Use bookAppointment tool to finalize booking with all collected details
+     12. Use updateConsultation tool to record appointment details
+
+     For Online:
+     1. Ask for week selection (this week or next week)
      2. WAIT for user's answer about the week
      3. THEN ask for Appointment Day (Working Days: Mon to Sat)
      4. WAIT for user's answer about the day
-     5. ONLY AFTER having both week and day, use fetchSlots tool
-     6. Present slots in hour-by-hour format (9-10 AM, 10-11 AM, etc.)
-     7. Wait for the user to select a slot - they may click on it or say it
+     5. ONLY AFTER having week and day, use fetchSlots tool
+     6. Present slots in hour-by-hour format (9 AM, 10 AM, etc.)
+     7. Wait for the user to select a slot from the popup or tell you their preferred time
      8. Ask for patient name
      9. Use bookAppointment tool to finalize booking with all collected details
      10. Use updateConsultation tool to record appointment details
@@ -83,29 +100,34 @@ function getSystemPrompt(userMobileNumber: string = '') {
     * week_selection: "this week" or "next week"
     * selected_day: day of week (e.g., "mon", "tue", etc.)
     * consultation_type: "Online" or "In-person"
-    * campus_id: "Indiranagar"
+    * campus_id: The selected center (e.g., "INDIRANAGAR", "JAYANAGAR", "JUBILEE HILLS", etc.)
     * speciality_id: "Physiotherapy"
     * user_id: 1
   - NEVER call fetchSlots until AFTER you have received BOTH week and day from the user
+  - For in-person consultations, NEVER call fetchSlots until you have the selected center
   - Use bookAppointment tool to book the appointment with these parameters:
     * week_selection: "this week" or "next week" 
     * selected_day: day of week (e.g., "mon", "tue", etc.)
     * start_time: the selected time slot
-    * consultation_type: "Online" or "In-Person"
-    * campus_id: "Indiranagar"
+    * consultation_type: Always use exactly "in-person" for in-person consultations and "Online" for online consultations. NEVER use "inperson" (without hyphen).
+    * campus_id: The selected center (for in-person)
     * speciality_id: "Physiotherapy"
     * user_id: 1
-    * patient_name: "vipul"
+    * patient_name: The name provided by the user
     * mobile_number: ${userMobileNumber}
     * payment_mode: "pay now"
     
-  Slot Formatting Rules:
-  - If the API returns slots like ["9AM", "10AM", "11AM"], you MUST convert them to hour ranges in your response like: "9-10 AM, 10-11 AM, 11-12 PM"
-  - Never say "We have slots from 9 AM to 7 PM" - always list each individual hour slot instead
-  - Always use 12-hour format with AM/PM for the slots (not 24-hour)
-  - Include ALL available slots in your response
+  Slot Handling Rules:
+  - When fetchSlots is called, slots will be displayed to the user in a popup
+  - The system will automatically format slots in hour ranges (9-10 AM, 10-11 AM, etc.)
+  - Do NOT verbally list out all available slots - just ask the user to select from what they see
+  - Just say: "We have the following slots available. You can let me know which one works for you."
   
-  CRITICAL RULE: NEVER skip the day selection - ALWAYS ask for the week FIRST, THEN ask for the day SECOND, and ONLY THEN fetch slots.
+  CRITICAL RULES:
+  - For in-person bookings, NEVER skip city and center selection
+  - NEVER skip the day selection - ALWAYS ask for the week FIRST, THEN ask for the day SECOND, and ONLY THEN fetch slots.
+  - Do NOT read out all centers or all slots - the UI will show them as popups
+  - ALWAYS use "in-person" with a hyphen for in-person appointments, never use "inperson"
   
   Rules:
   - Keep all responses under 2 sentences
@@ -162,7 +184,7 @@ const updateConsultationTool: BaseToolDefinition = {
             properties: {
               type: {
                 type: "string",
-                description: "Type of appointment (online/in-person)"
+                description: "Type of appointment (Online or in-person with hyphen)"
               },
               location: {
                 type: "string",
@@ -210,9 +232,21 @@ const selectedTools: SelectedTool[] = [
     toolId: "b12be5dc-46c7-41bc-be10-ef2eee906df8" // fetchSlots tool
   },
   {
-    toolId: "9b4aac67-37d0-4f1d-888f-ead39702d206" // bookAppointment tool
+    toolId: "9b4aac67-37d0-4f1d-888f-ead39702d206", // bookAppointment tool ID
+    responseHandler: (response) => {
+      console.log("Direct bookAppointment response:", response);
+      if (typeof window !== 'undefined') {
+        // Store the response in a global variable for easy access
+        window.__bookAppointmentResponse = response;
+        
+        // If you have a custom event system, you can dispatch an event
+        window.dispatchEvent(new CustomEvent('bookAppointmentComplete', { detail: response }));
+      }
+      return response;
+    }
   }
 ];
+
 
 export const demoConfig = (userMobileNumber: string): DemoConfig => ({
   title: "Dr. Riya - Physiotattva Consultation",
