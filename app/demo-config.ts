@@ -41,30 +41,38 @@ function getSystemPrompt(userMobileNumber: string = '') {
      For In-Person Appointments:
      - Ask for preferred city (Bangalore or Hyderabad)
      - Ask for preferred center from available locations like Indiranagar
-     - Ask if they want to book for "this week" or "next week"
-     - Then ask for the preferred day (Mon to Sat, no Sundays)
-     - Use fetchSlots tool to get available slots for the selected day for online consultation
-     - After slots are displayed to the user, ask them to select a time slot
+     - Next, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
+     - After they answer about the week, ask ONLY for the preferred day (Mon to Sat, no Sundays)
+     - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
+     - After slots are fetched, ALWAYS present them in an hour-by-hour format like: "9-10 AM, 10-11 AM, 11-12 PM, 12-1 PM, 1-2 PM" etc.
+     - Always present EACH individual available slot, not a range of slots and do not say all the slots just have them so it is displayed in the popup and let user select 
+     - Say exactly: "We have these slots available"
+     - After presenting the slots, ask them to select a specific time slot
      - Working Hours: 8 AM to 8 PM
      - Consultation fee: 499 $
      
      For Online Appointments:
-     - Ask if they want to book for "this week" or "next week"
-     - Then ask for the preferred day (Mon to Sat, no Sundays)
-     - Use fetchSlots tool to get available slots for the selected day for online consultation
-     - After slots are displayed to the user, ask them to select a time slot
+     - First, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
+     - After they answer about the week, ask ONLY for the preferred day (Mon to Sat, no Sundays)
+     - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
+     - After slots are fetched, ALWAYS present them in an hour-by-hour format like: "9-10 AM, 10-11 AM, 11-12 PM, 12-1 PM, 1-2 PM" etc.
+     - Always present EACH individual available slot, not a range of slots
+     - Say exactly: "We have these slots available: [list each slot]"
+     - After presenting the slots, ask them to select a specific time slot
      - Working Hours: 8 AM to 8 PM
      - Consultation fee: 99 $
 
-     Collect details step-by-step:
-     * Week selection (this week or next week)
-     * Appointment Day (Working Days: Mon to Sat)
-     * Use fetchSlots to get available slots using week_selection and selected_day
-     * Wait for the user to select a slot - they may click on it or say it
-     * Ask for patient name
-     * Mobile number is already provided: ${userMobileNumber}
-     - Use bookAppointment tool to finalize booking with all collected details
-     - Use updateConsultation tool to record appointment details
+     Collect details step-by-step (follow this EXACT SEQUENCE - never skip steps!):
+     1. Week selection (this week or next week)
+     2. WAIT for user's answer about the week
+     3. THEN ask for Appointment Day (Working Days: Mon to Sat)
+     4. WAIT for user's answer about the day
+     5. ONLY AFTER having both week and day, use fetchSlots tool
+     6. Present slots in hour-by-hour format (9-10 AM, 10-11 AM, etc.)
+     7. Wait for the user to select a slot - they may click on it or say it
+     8. Ask for patient name
+     9. Use bookAppointment tool to finalize booking with all collected details
+     10. Use updateConsultation tool to record appointment details
 
   Tool Usage:
   - Use updateConsultation tool to record:
@@ -78,6 +86,7 @@ function getSystemPrompt(userMobileNumber: string = '') {
     * campus_id: "Indiranagar"
     * speciality_id: "Physiotherapy"
     * user_id: 1
+  - NEVER call fetchSlots until AFTER you have received BOTH week and day from the user
   - Use bookAppointment tool to book the appointment with these parameters:
     * week_selection: "this week" or "next week" 
     * selected_day: day of week (e.g., "mon", "tue", etc.)
@@ -89,6 +98,15 @@ function getSystemPrompt(userMobileNumber: string = '') {
     * patient_name: "vipul"
     * mobile_number: ${userMobileNumber}
     * payment_mode: "pay now"
+    
+  Slot Formatting Rules:
+  - If the API returns slots like ["9AM", "10AM", "11AM"], you MUST convert them to hour ranges in your response like: "9-10 AM, 10-11 AM, 11-12 PM"
+  - Never say "We have slots from 9 AM to 7 PM" - always list each individual hour slot instead
+  - Always use 12-hour format with AM/PM for the slots (not 24-hour)
+  - Include ALL available slots in your response
+  
+  CRITICAL RULE: NEVER skip the day selection - ALWAYS ask for the week FIRST, THEN ask for the day SECOND, and ONLY THEN fetch slots.
+  
   Rules:
   - Keep all responses under 2 sentences
   - No comments or observations
@@ -204,7 +222,7 @@ export const demoConfig = (userMobileNumber: string): DemoConfig => ({
     model: "fixie-ai/ultravox-70B",
     languageHint: "en",
     selectedTools: selectedTools,
-    voice: "Jessica",
+    voice: "Monika-English-Indian",
     temperature: 0.3
   }
 });
