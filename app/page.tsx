@@ -16,85 +16,12 @@ import {
   UltravoxExperimentalMessageEvent,
 } from "ultravox-client";
 import { PhoneOffIcon, ExternalLinkIcon, CalendarIcon } from "lucide-react";
-import { Calendar, Clock, MapPin, User, CreditCard, ExternalLink } from 'lucide-react';
 import { CalComService } from "@/lib/calComService";
 import MicToggleButton from "./components/MicToggleButton";
 import demoConfig from "./demo-config";
 import { ConsultationData, Symptom, Appointment } from "@/lib/types";
 import { parseBookAppointmentResponse, formatDateTime, extractTimeFromDateTime } from './utils/toolResponseParser';
 import AppointmentConfirmation from './components/AppointmentConfirmation';
-
-// Simple appointment display component for direct tool response
-const SimpleAppointmentDisplay = ({ data }) => {
-  if (!data || !data.success) return null;
-  
-  const appointmentInfo = data.appointmentInfo || {};
-  const payment = data.payment || {};
-  
-  return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-green-200">
-      <div className="bg-green-500 p-3 text-white">
-        <h3 className="text-lg font-semibold">Appointment Confirmed!</h3>
-      </div>
-      
-      <div className="p-4 space-y-3">
-        {appointmentInfo.appointed_doctor && (
-          <div>
-            <span className="font-medium">Doctor: </span>
-            <span>{appointmentInfo.appointed_doctor}</span>
-          </div>
-        )}
-        
-        {appointmentInfo.startDateTime && (
-          <div>
-            <span className="font-medium">Date/Time: </span>
-            <span>{appointmentInfo.startDateTime}</span>
-          </div>
-        )}
-        
-        {appointmentInfo.consultation_type && (
-          <div>
-            <span className="font-medium">Type: </span>
-            <span className="capitalize">{appointmentInfo.consultation_type}</span>
-          </div>
-        )}
-        
-        {appointmentInfo.campus_id && (
-          <div>
-            <span className="font-medium">Center: </span>
-            <span>{appointmentInfo.campus_id}</span>
-          </div>
-        )}
-        
-        {payment.reference_id && (
-          <div>
-            <span className="font-medium">Booking ID: </span>
-            <span>{payment.reference_id}</span>
-          </div>
-        )}
-        
-        <div className="border-t border-gray-200 pt-3 mt-3">
-          <div className="text-sm text-gray-500 mb-2">
-            Status: <span className="font-medium text-orange-500">Pending Payment</span>
-          </div>
-          
-          {payment.short_url && (
-            <a
-              href={payment.short_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition-colors"
-            >
-              <span>Complete Payment</span>
-              <ExternalLink className="ml-2" size={16} />
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Mobile Number popup component
 const MobileNumberPopup = ({ onSubmit }) => {
   const [mobileNumber, setMobileNumber] = useState("");
@@ -370,11 +297,6 @@ interface AppointmentData extends Appointment {
   endDateTime?: string;
   campus?: string;
   status?: string;
-  // Added these properties that were missing
-  paymentData?: Record<string, any>;
-  leadId?: string | number;
-  paymentMode?: string;
-  consultationTypeId?: string | number;
 }
 
 interface ExtendedConsultation {
@@ -443,9 +365,6 @@ const Home = () => {
   const [showCenterPopup, setShowCenterPopup] = useState(false);
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedCenter, setSelectedCenter] = useState("");
-  
-  // Add state for storing direct tool responses
-  const [directBookAppointmentResponse, setDirectBookAppointmentResponse] = useState(null);
   
   const transcriptContainerRef = useRef(null);
   const calendarService = useMemo(() => CalComService.getInstance(), []);
@@ -551,66 +470,8 @@ const Home = () => {
     }
   }, [callTranscript, callDebugMessages]);
 
-  // Function to directly extract bookAppointment response from a message
-  const extractBookAppointmentResponse = (message) => {
-    try {
-      console.log("Attempting to extract bookAppointment response from message");
-      
-      // Don't process if it's not a bookAppointment message
-      if (!message.includes("bookAppointment")) {
-        return null;
-      }
-      
-      // Try different extraction strategies
-      // Strategy 1: Direct JSON extraction
-      const jsonPattern = /(\{[\s\S]*"success"[\s\S]*\})/;
-      const jsonMatch = message.match(jsonPattern);
-      if (jsonMatch && jsonMatch[1]) {
-        try {
-          const responseData = JSON.parse(jsonMatch[1]);
-          console.log("Extracted bookAppointment response (direct):", responseData);
-          return responseData;
-        } catch (e) {
-          console.error("Failed to parse direct JSON match:", e);
-        }
-      }
-      
-      // Strategy 2: Look for backtick-wrapped JSON
-      const backtickPattern = /`({[\s\S]*?})`/;
-      const backtickMatch = message.match(backtickPattern);
-      if (backtickMatch && backtickMatch[1]) {
-        try {
-          const responseData = JSON.parse(backtickMatch[1]);
-          console.log("Extracted bookAppointment response (backticks):", responseData);
-          return responseData;
-        } catch (e) {
-          console.error("Failed to parse backtick JSON:", e);
-        }
-      }
-      
-      // Strategy 3: Full message scan for JSON
-      const jsonStart = message.indexOf('{');
-      const jsonEnd = message.lastIndexOf('}') + 1;
-      
-      if (jsonStart !== -1 && jsonEnd > jsonStart) {
-        try {
-          const jsonStr = message.substring(jsonStart, jsonEnd);
-          const responseData = JSON.parse(jsonStr);
-          console.log("Extracted bookAppointment response (full scan):", responseData);
-          return responseData;
-        } catch (e) {
-          console.error("Failed to parse full message JSON:", e);
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.error("Error in extractBookAppointmentResponse:", error);
-      return null;
-    }
-  };
-
   // Detect appointment details and payment links from conversation
+
   useEffect(() => {
     if (callDebugMessages.length > 0) {
       const latestMessage = callDebugMessages[callDebugMessages.length - 1].message.message;
@@ -653,7 +514,7 @@ const Home = () => {
           }
           
           // Extract consultation type
-          let consultationType = "TBD";
+          let consultationType = "In-person";
           if (latestMessage.includes("online consultation")) {
             consultationType = "Online";
           } else if (latestMessage.includes("in-person consultation")) {
@@ -780,57 +641,46 @@ const Home = () => {
       // ENHANCED BOOKING APPOINTMENT HANDLER
       if (latestMessage.includes("bookAppointment")) {
         try {
-          // Try to directly extract the response first
-          const directResponse = extractBookAppointmentResponse(latestMessage);
+          // Use the utility function to parse the response
+          const appointmentData = parseBookAppointmentResponse(latestMessage);
           
-          if (directResponse && directResponse.success) {
-            console.log("Successfully extracted direct bookAppointment response:", directResponse);
-            
-            // Store the direct response
-            setDirectBookAppointmentResponse(directResponse);
-            
-            // Update the regular consultation data too for backward compatibility
-            const appointmentInfo = directResponse.appointmentInfo || {};
-            const payment = directResponse.payment || {};
+          if (appointmentData && appointmentData.success) {
+            console.log("Successfully parsed booking data:", appointmentData);
             
             // Format time from startDateTime
-            let formattedTime = "TBD";
-            if (appointmentInfo.startDateTime) {
-              const parts = appointmentInfo.startDateTime.split(' ');
-              if (parts.length >= 2) {
-                formattedTime = parts[1];
-              }
-            }
+            let formattedTime = extractTimeFromDateTime(appointmentData.appointment.startDateTime);
             
             // Update consultation data with all appointment details
             setConsultationData(prev => ({
               ...prev,
               appointment: {
                 ...prev.appointment,
-                type: appointmentInfo.consultation_type || "TBD",
-                doctor: appointmentInfo.appointed_doctor || "",
-                startDateTime: appointmentInfo.startDateTime || "",
-                date: appointmentInfo.calculated_date || 
-                      (appointmentInfo.startDateTime ? appointmentInfo.startDateTime.split(' ')[0] : "TBD"),
+                type: appointmentData.appointment.consultationType,
+                doctor: appointmentData.appointment.doctorName,
+                startDateTime: appointmentData.appointment.startDateTime,
+                date: appointmentData.appointment.calculatedDate || 
+                      (appointmentData.appointment.startDateTime ? 
+                        appointmentData.appointment.startDateTime.split(' ')[0] : 
+                        "TBD"),
                 time: formattedTime,
-                paymentLink: payment.short_url || "",
-                bookingId: payment.reference_id || "",
+                paymentLink: appointmentData.payment.shortUrl,
+                bookingId: appointmentData.payment.referenceId,
                 location: selectedCenter,
                 mobileNumber: userMobileNumber,
                 status: "Pending Payment",
-                consultationTypeId: appointmentInfo.consultation_type_id || "",
-                leadId: appointmentInfo.lead_id || "",
-                paymentMode: appointmentInfo.payment_mode || "online",
-                paymentData: payment.paymentData || {}
+                consultationTypeId: appointmentData.appointment.consultationTypeId,
+                leadId: appointmentData.appointment.leadId,
+                paymentMode: appointmentData.appointment.paymentMode,
+                paymentData: appointmentData.payment.paymentData
               }
             }));
             
             // Set payment link and booking ID separately for easy access
-            if (payment.short_url) {
-              setPaymentLink(payment.short_url);
+            if (appointmentData.payment.shortUrl) {
+              setPaymentLink(appointmentData.payment.shortUrl);
             }
-            if (payment.reference_id) {
-              setBookingId(payment.reference_id);
+            if (appointmentData.payment.referenceId) {
+              setBookingId(appointmentData.payment.referenceId);
             }
             
             // Refresh upcoming appointments
@@ -838,137 +688,84 @@ const Home = () => {
               fetchUpcomingAppointments(userMobileNumber);
             }, 2000);
           } else {
-            // Fall back to existing parsing logic if direct extraction fails
-            // Use the utility function to parse the response
-            const appointmentData = parseBookAppointmentResponse(latestMessage);
+            // Fallback to original json extraction if utility function fails
+            const jsonRegex = /\{[\s\S]*"success"[\s\S]*\}/;
+            const jsonMatch = latestMessage.match(jsonRegex);
             
-            if (appointmentData && appointmentData.success) {
-              console.log("Successfully parsed booking data:", appointmentData);
-              
-              // Format time from startDateTime
-              let formattedTime = extractTimeFromDateTime(appointmentData.appointment.startDateTime);
-              
-              // Update consultation data with all appointment details
-              setConsultationData(prev => ({
-                ...prev,
-                appointment: {
-                  ...prev.appointment,
-                  type: appointmentData.appointment.consultationType,
-                  doctor: appointmentData.appointment.doctorName,
-                  startDateTime: appointmentData.appointment.startDateTime,
-                  date: appointmentData.appointment.calculatedDate || 
-                        (appointmentData.appointment.startDateTime ? 
-                          appointmentData.appointment.startDateTime.split(' ')[0] : 
-                          "TBD"),
-                  time: formattedTime,
-                  paymentLink: appointmentData.payment.shortUrl,
-                  bookingId: appointmentData.payment.referenceId,
-                  location: selectedCenter,
-                  mobileNumber: userMobileNumber,
-                  status: "Pending Payment",
-                  consultationTypeId: appointmentData.appointment.consultationTypeId,
-                  leadId: appointmentData.appointment.leadId,
-                  paymentMode: appointmentData.appointment.paymentMode,
-                  paymentData: appointmentData.payment.paymentData
-                }
-              }));
-              
-              // Set payment link and booking ID separately for easy access
-              if (appointmentData.payment.shortUrl) {
-                setPaymentLink(appointmentData.payment.shortUrl);
-              }
-              if (appointmentData.payment.referenceId) {
-                setBookingId(appointmentData.payment.referenceId);
-              }
-              
-              // Refresh upcoming appointments
-              setTimeout(() => {
-                fetchUpcomingAppointments(userMobileNumber);
-              }, 2000);
-            } else {
-              // Fallback to original json extraction if utility function fails
-              const jsonRegex = /\{[\s\S]*"success"[\s\S]*\}/;
-              const jsonMatch = latestMessage.match(jsonRegex);
-              
-              if (jsonMatch) {
-                try {
-                  const jsonData = JSON.parse(jsonMatch[0]);
-                  console.log("Fallback parsed booking result data:", jsonData);
+            if (jsonMatch) {
+              try {
+                const jsonData = JSON.parse(jsonMatch[0]);
+                console.log("Fallback parsed booking result data:", jsonData);
+                
+                if (jsonData.success) {
+                  const appointmentInfo = jsonData.appointmentInfo || {};
+                  const payment = jsonData.payment || {};
                   
-                  if (jsonData.success) {
-                    // Store the direct response
-                    setDirectBookAppointmentResponse(jsonData);
-                    
-                    const appointmentInfo = jsonData.appointmentInfo || {};
-                    const payment = jsonData.payment || {};
-                    
-                    // Extract all necessary data
-                    const doctor = appointmentInfo.appointed_doctor || "";
-                    const startDateTime = appointmentInfo.startDateTime || "";
-                    const consultationType = appointmentInfo.consultation_type || "TBD";
-                    const paymentUrl = payment.short_url || "";
-                    const bookingRef = payment.reference_id || "";
-                    
-                    // Format date and time
-                    let formattedDate = "TBD";
-                    let formattedTime = "TBD";
-                    
-                    if (startDateTime) {
-                      const parts = startDateTime.split(' ');
-                      if (parts.length >= 2) {
-                        formattedDate = parts[0];
+                  // Extract all necessary data
+                  const doctor = appointmentInfo.appointed_doctor || "";
+                  const startDateTime = appointmentInfo.startDateTime || "";
+                  const consultationType = appointmentInfo.consultation_type || "TBD";
+                  const paymentUrl = payment.short_url || "";
+                  const bookingRef = payment.reference_id || "";
+                  
+                  // Format date and time
+                  let formattedDate = "TBD";
+                  let formattedTime = "TBD";
+                  
+                  if (startDateTime) {
+                    const parts = startDateTime.split(' ');
+                    if (parts.length >= 2) {
+                      formattedDate = parts[0];
+                      
+                      // Convert time to readable format
+                      const timeParts = parts[1].split(':');
+                      if (timeParts.length >= 2) {
+                        const hour = parseInt(timeParts[0]);
+                        const minute = timeParts[1];
                         
-                        // Convert time to readable format
-                        const timeParts = parts[1].split(':');
-                        if (timeParts.length >= 2) {
-                          const hour = parseInt(timeParts[0]);
-                          const minute = timeParts[1];
-                          
-                          // Format as "4-5 PM" style
-                          const hourEnd = hour + 1;
-                          const period = hour >= 12 ? "PM" : "AM";
-                          const hour12 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-                          
-                          formattedTime = `${hour12}-${hourEnd > 12 ? hourEnd - 12 : hourEnd} ${period}`;
-                        }
+                        // Format as "4-5 PM" style
+                        const hourEnd = hour + 1;
+                        const period = hour >= 12 ? "PM" : "AM";
+                        const hour12 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+                        
+                        formattedTime = `${hour12}-${hourEnd > 12 ? hourEnd - 12 : hourEnd} ${period}`;
                       }
                     }
-                    
-                    // Update consultation data with all the appointment details
-                    setConsultationData(prev => ({
-                      ...prev,
-                      appointment: {
-                        ...prev.appointment,
-                        type: consultationType,
-                        doctor: doctor,
-                        startDateTime: startDateTime,
-                        date: formattedDate,
-                        time: formattedTime,
-                        paymentLink: paymentUrl,
-                        bookingId: bookingRef,
-                        location: selectedCenter,
-                        mobileNumber: userMobileNumber,
-                        status: "Pending Payment",
-                        paymentData: payment.paymentData || {}
-                      }
-                    }));
-                    
-                    // Set payment link and booking ID separately for easy access
-                    if (paymentUrl) {
-                      setPaymentLink(paymentUrl);
-                    }
-                    if (bookingRef) {
-                      setBookingId(bookingRef);
-                    }
-                    
-                    // Refresh upcoming appointments
-                    setTimeout(() => {
-                      fetchUpcomingAppointments(userMobileNumber);
-                    }, 2000);
                   }
-                } catch (error) {
-                  console.error("Error parsing JSON response:", error);
+                  
+                  // Update consultation data with all the appointment details
+                  setConsultationData(prev => ({
+                    ...prev,
+                    appointment: {
+                      ...prev.appointment,
+                      type: consultationType,
+                      doctor: doctor,
+                      startDateTime: startDateTime,
+                      date: formattedDate,
+                      time: formattedTime,
+                      paymentLink: paymentUrl,
+                      bookingId: bookingRef,
+                      location: selectedCenter,
+                      mobileNumber: userMobileNumber,
+                      status: "Pending Payment"
+                    }
+                  }));
+                  
+                  // Set payment link and booking ID separately for easy access
+                  if (paymentUrl) {
+                    setPaymentLink(paymentUrl);
+                  }
+                  if (bookingRef) {
+                    setBookingId(bookingRef);
+                  }
+                  
+                  // Refresh upcoming appointments
+                  setTimeout(() => {
+                    fetchUpcomingAppointments(userMobileNumber);
+                  }, 2000);
                 }
+              } catch (error) {
+                console.error("Error parsing JSON response:", error);
               }
             }
           }
@@ -1003,7 +800,7 @@ const Home = () => {
         });
       }
     }
-  }, [callDebugMessages, userMobileNumber, paymentLink, bookingId, selectedCenter]);
+  }, [callDebugMessages, userMobileNumber, paymentLink, bookingId, selectedCenter])
 
   const handleStatusChange = useCallback((status: string | undefined) => {
     if (status) {
@@ -1067,7 +864,6 @@ const Home = () => {
       setSelectedWeek("");
       setPaymentLink("");
       setBookingId("");
-      setDirectBookAppointmentResponse(null); // Reset the direct response
       lastProcessedMessageRef.current = "";
       setConsultationData({
         symptoms: [],
@@ -1383,47 +1179,9 @@ const Home = () => {
                             </div>
                           )}
 
-                          {/* Display the direct appointment response if available */}
-                          {directBookAppointmentResponse && (
-                            <div className="mt-4">
-                              <h2 className="text-xl font-semibold border-b border-green-500 pb-1 mb-4">
-                                Appointment Confirmation
-                              </h2>
-                              <SimpleAppointmentDisplay data={directBookAppointmentResponse} />
-                            </div>
-                          )}
 
-                          {/* Use existing appointment display as fallback */}
-                          {!directBookAppointmentResponse && consultationData.appointment && 
-                           consultationData.appointment.bookingId && (
-                            <div className="mt-4">
-                              <h2 className="text-xl font-semibold border-b border-green-500 pb-1 mb-4">
-                                Appointment Confirmation
-                              </h2>
-                              <AppointmentConfirmation 
-                                appointmentData={{
-                                  success: true,
-                                  appointment: {
-                                    doctorName: consultationData.appointment.doctor || "TBD",
-                                    startDateTime: consultationData.appointment.startDateTime || "",
-                                    calculatedDate: consultationData.appointment.date || "",
-                                    consultationType: consultationData.appointment.type || "TBD",
-                                    location: consultationData.appointment.location || "",
-                                    consultationTypeId: consultationData.appointment.consultationTypeId || "",
-                                    leadId: consultationData.appointment.leadId || "",
-                                    paymentMode: consultationData.appointment.paymentMode || "online"
-                                  },
-                                  payment: {
-                                    shortUrl: consultationData.appointment.paymentLink || "https://rzp.io/rzp/LIWxbP4D",
-                                    referenceId: consultationData.appointment.bookingId || "",
-                                    paymentData: consultationData.appointment.paymentData || {}
-                                  }
-                                }}
-                              />
-                            </div>
-                          )}
 
-                          {/* Keep the old Scheduled Consultation section for backward compatibility */}
+
                           {(consultationData.appointment && 
                            (consultationData.appointment.date !== "TBD" || 
                             consultationData.appointment.time !== "TBD" || 
@@ -1456,11 +1214,10 @@ const Home = () => {
     {consultationData.appointment.type === "Online" ? "https://rzp.io/rzp/3AMWZfL" : "https://rzp.io/rzp/LIWxbP4D"}
   </a>
 </div>
-<div>
-  <span className="font-medium">Date: </span>
-  {consultationData.appointment.date || "TBD"}
-</div>
-
+                                  <div>
+                                    <span className="font-medium">Date: </span>
+                                    {consultationData.appointment.date || "TBD"}
+                                  </div>
                                   <div>
                                     <span className="font-medium">Time: </span>
                                     {consultationData.appointment.time || "TBD"}
