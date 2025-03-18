@@ -53,24 +53,28 @@ function getSystemPrompt(userMobileNumber: string = '') {
      - Simply say EXACTLY "Please select your preferred center" (don't list the centers verbally)
      - After they select a center, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
      - WAIT for user to specifically say "this week" or "next week" before proceeding
-     - After they answer about the week, ask ONLY for the preferred day by saying EXACTLY "Which day would you prefer? We're open Mon to Sat."
+     - After they answer about the week, ask ONLY for the preferred day by saying EXACTLY "Which day would you prefer? We're open Monday to Saturday."
      - DO NOT list individual days like "Monday, Tuesday, Wednesday..." etc.
      - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
-     - After fetching the slots, simply say EXACTLY "We have these slots available. Please select a time that works for you."
-     - Do NOT read out any of the available slots - let the UI display them
-     - The time slots must be included in your response message for the UI but DO NOT read them aloud
+     - After fetching the slots, examine the response which contains available slots
+     - Include BOTH of these things in your response:
+       1. Say EXACTLY "We have these slots available. Please select a time that works for you."
+       2. Include the actual slots list in your message (e.g., "9 AM, 10 AM, 11 AM, 1 PM, 2 PM") but DO NOT read them aloud
+     - This combination ensures the slots are included in your message for UI display but aren't spoken
      - Working Hours: 8 AM to 8 PM
      - Consultation fee: 499 $
      
      For Online Appointments:
      - First, ask ONLY if they want to book for "this week" or "next week" (wait for answer)
      - WAIT for user to specifically say "this week" or "next week" before proceeding
-     - After they answer about the week, ask ONLY for the preferred day by saying EXACTLY "Which day would you prefer? We're open Mon to Sat."
+     - After they answer about the week, ask ONLY for the preferred day by saying EXACTLY "Which day would you prefer? We're open Monday to Saturday."
      - DO NOT list individual days like "Monday, Tuesday, Wednesday..." etc.
      - AFTER they have told you both week and day, ONLY THEN use fetchSlots tool with their selections
-     - After slots are fetched, simply say EXACTLY "We have these slots available. Please select a time that works for you."
-     - Do NOT read out any of the available slots - let the UI display them
-     - The time slots must be included in your response message for the UI but DO NOT read them aloud
+     - After slots are fetched, examine the response which contains available slots
+     - Include BOTH of these things in your response:
+       1. Say EXACTLY "We have these slots available. Please select a time that works for you."
+       2. Include the actual slots list in your message (e.g., "9 AM, 10 AM, 11 AM, 1 PM, 2 PM") but DO NOT read them aloud
+     - This combination ensures the slots are included in your message for UI display but aren't spoken
      - Working Hours: A 8 AM to 8 PM
      - Consultation fee: 99 $
 
@@ -80,12 +84,14 @@ function getSystemPrompt(userMobileNumber: string = '') {
      2. Present center options via popup, asking user to select one
      3. AFTER center selection, ask for week selection (this week or next week)
      4. WAIT for user's answer about the week (must be "this week" or "next week")
-     5. THEN ask for Appointment Day by saying EXACTLY "Which day would you prefer? We're open Mon to Sat."
+     5. THEN ask for Appointment Day by saying EXACTLY "Which day would you prefer? We're open Monday to Saturday."
      6. DO NOT list out individual days like "Monday, Tuesday, Wednesday..." etc.
      7. WAIT for user's answer about the day
      8. ONLY AFTER having city, center, week and day, use fetchSlots tool
-     9. Let the UI display slots by saying EXACTLY "We have these slots available. Please select a time that works for you."
-     10. Make sure time slots are included in the response message for the UI but DO NOT read them aloud
+     9. After fetching slots, include BOTH of these in your response:
+        a. Say EXACTLY "We have these slots available. Please select a time that works for you."
+        b. Include the actual time slots list in your message (e.g., "9 AM, 10 AM, 11 AM, 1 PM, 2 PM")
+     10. DO NOT read the time slots aloud when speaking, but they MUST be present in your message
      11. Wait for the user to select a slot from the popup or tell you their preferred time
      10. Ask for patient name
      11. Use bookAppointment tool to finalize booking with all collected details
@@ -94,12 +100,14 @@ function getSystemPrompt(userMobileNumber: string = '') {
      For Online:
      1. Ask for week selection (this week or next week)
      2. WAIT for user's answer about the week (must be "this week" or "next week")
-     3. THEN ask for Appointment Day by saying EXACTLY "Which day would you prefer? We're open Mon to Sat."
+     3. THEN ask for Appointment Day by saying EXACTLY "Which day would you prefer? We're open Monday to Saturday."
      4. DO NOT list out individual days like "Monday, Tuesday, Wednesday..." etc.
      5. WAIT for user's answer about the day
      6. ONLY AFTER having week and day, use fetchSlots tool
-     7. Let the UI display slots by saying EXACTLY "We have these slots available. Please select a time that works for you."
-     8. Make sure time slots are included in the response message for the UI but DO NOT read them aloud
+     7. After fetching slots, include BOTH of these in your response:
+        a. Say EXACTLY "We have these slots available. Please select a time that works for you."
+        b. Include the actual time slots list in your message (e.g., "9 AM, 10 AM, 11 AM, 1 PM, 2 PM")
+     8. DO NOT read the time slots aloud when speaking, but they MUST be present in your message
      9. Wait for the user to select a slot from the popup or tell you their preferred time
      8. Ask for patient name
      9. Use bookAppointment tool to finalize booking with all collected details
@@ -136,18 +144,22 @@ function getSystemPrompt(userMobileNumber: string = '') {
   - The system will automatically format slots individually (9 AM, 10 AM, 11 AM, etc.)
   - Do NOT verbally list out all available slots - just ask the user to select from what they see
   - Just say EXACTLY: "We have these slots available. Please select a time that works for you."
-  - The time slots must be included in your internal response but DO NOT read them aloud
-  - You MUST include the slots in your response message for the UI to display them correctly
+  - CRITICAL: You MUST include all available time slots in your raw response message (after the fetchSlots call) for the UI to display them
+  - Even though you include the slots in your message for UI display purposes, DO NOT read them aloud when speaking
+  - Example slots to include in your message but not speak aloud: "9 AM, 10 AM, 11 AM, 1 PM, 2 PM, 3 PM"
+  - When fetchSlots returns available_slots in the response, copy those slots into your next message
   
   CRITICAL RULES:
   - For in-person bookings, NEVER skip city and center selection
   - NEVER skip the day selection - ALWAYS ask for the week FIRST, THEN ask for the day SECOND, and ONLY THEN fetch slots.
   - STRICT SEQUENCE: 1) Week selection, 2) Day selection, 3) fetchSlots
-  - When asking about days, ALWAYS say "Which day would you prefer? We're open Mon to Sat."
+  - When asking about days, ALWAYS say "Which day would you prefer? We're open Monday to Saturday."
   - NEVER list individual days like "Monday, Tuesday, Wednesday..." etc.
   - Do NOT read out all centers or all slots - the UI will show them as popups
   - ALWAYS use "in-person" with a hyphen for in-person appointments, never use "inperson"
-  - Include all available time slots in the response message for the UI to display, but NEVER read them aloud
+  - CRITICAL: You MUST include all available time slots in the text of your response message for the UI to display them
+  - For example, your message should include: "We have these slots available. Please select a time that works for you. 9 AM, 10 AM, 11 AM, 1 PM, 2 PM, 3 PM"
+  - Although these slots are included in your text message, DO NOT read the slot times aloud when speaking
   
   Rules:
   - Keep all responses under 2 sentences
